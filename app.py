@@ -35,14 +35,15 @@ def clean_text(text):
 def extract_skills(text):
     skills = [
         "python", "machine learning", "data science", "sql",
-        "deep learning", "pandas", "numpy", "tensorflow",
-        "flask", "streamlit", "java", "c", "c++", "excel",
-        "html", "css", "javascript"
+        "deep learning", "classification", "anomaly detection",
+        "pandas", "numpy", "scikit learn", "model training",
+        "data analysis", "tensorflow", "flask", "streamlit"
     ]
     return [skill for skill in skills if skill in text]
 
 # -------------------- LOAD MODEL --------------------
-model = joblib.load("resume_model.pkl")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "resume_model.pkl")
+model = joblib.load(MODEL_PATH)
 
 # -------------------- USER INPUTS --------------------
 st.subheader("📋 Optional: Paste Job Description")
@@ -64,30 +65,35 @@ if uploaded_file is not None:
     cleaned_resume = clean_text(resume_text)
 
     if st.button("Predict"):
+        # ---- Prediction ----
         prediction = model.predict([cleaned_resume])[0]
-        probability = max(model.predict_proba([cleaned_resume])[0]) * 100
 
-        # -------- MAIN RESULTS --------
+        probs = model.predict_proba([cleaned_resume])[0]
+        normalized_confidence = (max(probs) / sum(probs)) * 100
+
+        # ---- MAIN RESULTS ----
         st.success(f"✅ Resume Category: {prediction}")
-        st.info(f"📊 Confidence Score: {probability:.2f}%")
-        st.metric("📈 Resume Score", f"{probability:.2f}/100")
+        st.metric(
+            label="📊 Resume Match Score",
+            value=f"{normalized_confidence:.2f} / 100"
+        )
 
-        # -------- SHORTLIST DECISION --------
-        if probability >= 60:
+        # ---- SHORTLIST DECISION ----
+        if normalized_confidence >= 60:
             st.success("🎯 Decision: SHORTLISTED")
         else:
             st.warning("⚠️ Decision: NEEDS MANUAL REVIEW")
 
-        # -------- SKILL EXTRACTION --------
+        # ---- SKILL EXTRACTION ----
         st.subheader("🛠️ Detected Skills")
         skills_found = extract_skills(cleaned_resume)
 
         if skills_found:
             st.write(", ".join(skills_found))
         else:
-            st.write("No major skills detected")
+            st.write("No major ML-related skills detected")
 
-        # -------- JOB DESCRIPTION MATCHING --------
+        # ---- JOB DESCRIPTION MATCHING ----
         if job_desc.strip() != "":
             cleaned_jd = clean_text(job_desc)
             vectors = model.named_steps["tfidf"].transform(
@@ -97,12 +103,12 @@ if uploaded_file is not None:
                 vectors[0], vectors[1]
             )[0][0] * 100
 
-            st.subheader("📊 Job Match Score")
+            st.subheader("📊 Job Description Match")
             st.progress(int(similarity))
             st.write(f"Match Percentage: {similarity:.2f}%")
 
-        # -------- LOW CONFIDENCE EXPLANATION --------
-        if probability < 40:
-            st.info(
-                "ℹ️ Low confidence may be due to limited matching keywords or resume format."
-            )
+        # ---- EXPLANATION NOTE ----
+        st.info(
+            "ℹ️ Match score is normalized to improve interpretability for recruiters. "
+            "Higher scores indicate stronger alignment with the predicted category."
+        )
