@@ -35,9 +35,10 @@ def clean_text(text):
 def extract_skills(text):
     skills = [
         "python", "machine learning", "data science", "sql",
-        "deep learning", "classification", "anomaly detection",
-        "pandas", "numpy", "scikit learn", "model training",
-        "data analysis", "tensorflow", "flask", "streamlit"
+        "classification", "anomaly detection",
+        "pandas", "numpy", "scikit learn",
+        "model training", "data analysis",
+        "tensorflow", "flask", "streamlit"
     ]
     return [skill for skill in skills if skill in text]
 
@@ -46,7 +47,7 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "resume_model.pkl")
 model = joblib.load(MODEL_PATH)
 
 # -------------------- USER INPUTS --------------------
-st.subheader("📋 Optional: Paste Job Description")
+st.subheader("📋 Paste Job Description")
 job_desc = st.text_area("Enter job description here")
 
 uploaded_file = st.file_uploader(
@@ -55,7 +56,7 @@ uploaded_file = st.file_uploader(
 )
 
 # -------------------- PREDICTION & OUTPUT --------------------
-if uploaded_file is not None:
+if uploaded_file is not None and job_desc.strip() != "":
     with pdfplumber.open(uploaded_file) as pdf:
         resume_text = ""
         for page in pdf.pages:
@@ -63,23 +64,30 @@ if uploaded_file is not None:
                 resume_text += page.extract_text()
 
     cleaned_resume = clean_text(resume_text)
+    cleaned_jd = clean_text(job_desc)
 
     if st.button("Predict"):
-        # ---- Prediction ----
+        # ---- CATEGORY PREDICTION ----
         prediction = model.predict([cleaned_resume])[0]
-
-        probs = model.predict_proba([cleaned_resume])[0]
-        normalized_confidence = (max(probs) / sum(probs)) * 100
-
-        # ---- MAIN RESULTS ----
         st.success(f"✅ Resume Category: {prediction}")
+
+        # ---- JOB MATCH PERCENTAGE (MAIN SCORE) ----
+        vectors = model.named_steps["tfidf"].transform(
+            [cleaned_resume, cleaned_jd]
+        )
+        match_percentage = cosine_similarity(
+            vectors[0], vectors[1]
+        )[0][0] * 100
+
         st.metric(
-            label="📊 Resume Match Score",
-            value=f"{normalized_confidence:.2f} / 100"
+            label="📊 Match Percentage",
+            value=f"{match_percentage:.2f} %"
         )
 
+        st.progress(int(match_percentage))
+
         # ---- SHORTLIST DECISION ----
-        if normalized_confidence >= 60:
+        if match_percentage >= 60:
             st.success("🎯 Decision: SHORTLISTED")
         else:
             st.warning("⚠️ Decision: NEEDS MANUAL REVIEW")
@@ -93,22 +101,11 @@ if uploaded_file is not None:
         else:
             st.write("No major ML-related skills detected")
 
-        # ---- JOB DESCRIPTION MATCHING ----
-        if job_desc.strip() != "":
-            cleaned_jd = clean_text(job_desc)
-            vectors = model.named_steps["tfidf"].transform(
-                [cleaned_resume, cleaned_jd]
-            )
-            similarity = cosine_similarity(
-                vectors[0], vectors[1]
-            )[0][0] * 100
-
-            st.subheader("📊 Job Description Match")
-            st.progress(int(similarity))
-            st.write(f"Match Percentage: {similarity:.2f}%")
-
         # ---- EXPLANATION NOTE ----
         st.info(
-            "ℹ️ Match score is normalized to improve interpretability for recruiters. "
-            "Higher scores indicate stronger alignment with the predicted category."
+            "ℹ️ Match Percentage represents similarity between resume and job description "
+            "using TF-IDF and cosine similarity. Higher values indicate stronger relevance."
         )
+
+elif uploaded_file is not None:
+    st.warning("⚠️ Please paste a Job Description to calculate match percentage.")
