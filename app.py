@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 st.set_page_config(page_title="AI Resume Screening", layout="wide")
 
 st.title("📄 AI Resume Screening & Candidate Ranking")
-st.write("Upload multiple resumes and rank candidates based on match with job description.")
+st.write("Upload multiple resumes and rank candidates based on their match with the job description.")
 
 # ---------------- TEXT CLEANING ----------------
 def clean_text(text):
@@ -18,7 +18,7 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
-# ---------------- JOB DESCRIPTION ----------------
+# ---------------- JOB DESCRIPTION INPUT ----------------
 job_desc = st.text_area("Paste Job Description")
 
 # ---------------- FILE UPLOAD ----------------
@@ -28,6 +28,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# ---------------- ANALYZE BUTTON ----------------
 if st.button("Analyze Candidates"):
 
     if not job_desc:
@@ -46,6 +47,7 @@ if st.button("Analyze Candidates"):
 
         resume_text = ""
 
+        # Extract text from PDF
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
                 text = page.extract_text()
@@ -54,24 +56,31 @@ if st.button("Analyze Candidates"):
 
         cleaned_resume = clean_text(resume_text)
 
-        # -------- Improved TF-IDF Similarity --------
-        vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1,2),
-            max_features=500
-        )
+        # -------- TF-IDF Similarity --------
+        vectorizer = TfidfVectorizer(stop_words="english")
 
-        vectors = vectorizer.fit_transform([cleaned_resume, cleaned_jd])
+        docs = [cleaned_jd, cleaned_resume]
+        tfidf_matrix = vectorizer.fit_transform(docs)
 
-        similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
+        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
 
-        match_percentage = similarity * 100
+        # -------- Keyword Overlap Score --------
+        jd_words = set(cleaned_jd.split())
+        resume_words = set(cleaned_resume.split())
+
+        common_keywords = jd_words.intersection(resume_words)
+        keyword_score = len(common_keywords) / max(len(jd_words), 1)
+
+        # -------- Final Combined Score --------
+        final_score = (0.7 * similarity) + (0.3 * keyword_score)
+
+        match_percentage = final_score * 100
 
         decision = "Shortlisted" if match_percentage >= 50 else "Not Shortlisted"
 
         results.append({
             "Candidate": file.name,
-            "Match %": round(match_percentage,2),
+            "Match %": round(match_percentage, 2),
             "Decision": decision
         })
 
@@ -87,7 +96,7 @@ if st.button("Analyze Candidates"):
 
     st.subheader("🏆 Candidate Ranking")
 
-    st.dataframe(df_results)
+    st.dataframe(df_results, use_container_width=True)
 
     # ---------------- TOP CANDIDATE ----------------
     top = df_results.iloc[0]
