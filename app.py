@@ -5,13 +5,13 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# ---------------- PAGE SETTINGS ----------------
 st.set_page_config(page_title="AI Resume Screening", layout="wide")
 
 st.title("📄 AI Resume Screening & Candidate Ranking")
-
 st.write("Upload multiple resumes and rank candidates based on match with job description.")
 
-# ---------------- CLEAN TEXT ----------------
+# ---------------- TEXT CLEANING ----------------
 def clean_text(text):
     text = text.lower()
     text = re.sub(r'[^a-z ]', ' ', text)
@@ -54,15 +54,20 @@ if st.button("Analyze Candidates"):
 
         cleaned_resume = clean_text(resume_text)
 
-        vectorizer = TfidfVectorizer()
+        # -------- Improved TF-IDF Similarity --------
+        vectorizer = TfidfVectorizer(
+            stop_words="english",
+            ngram_range=(1,2),
+            max_features=500
+        )
 
         vectors = vectorizer.fit_transform([cleaned_resume, cleaned_jd])
 
-        similarity = cosine_similarity(vectors[0], vectors[1])[0][0]
+        similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
 
         match_percentage = similarity * 100
 
-        decision = "Shortlisted" if match_percentage >= 60 else "Not Shortlisted"
+        decision = "Shortlisted" if match_percentage >= 50 else "Not Shortlisted"
 
         results.append({
             "Candidate": file.name,
@@ -70,6 +75,7 @@ if st.button("Analyze Candidates"):
             "Decision": decision
         })
 
+    # ---------------- RANKING ----------------
     df_results = pd.DataFrame(results)
 
     df_results = df_results.sort_values(
@@ -83,12 +89,14 @@ if st.button("Analyze Candidates"):
 
     st.dataframe(df_results)
 
+    # ---------------- TOP CANDIDATE ----------------
     top = df_results.iloc[0]
 
     st.success(
         f"Top Candidate: {top['Candidate']} with {top['Match %']}% match"
     )
 
+    # ---------------- DOWNLOAD CSV ----------------
     csv = df_results.to_csv(index=False).encode("utf-8")
 
     st.download_button(
