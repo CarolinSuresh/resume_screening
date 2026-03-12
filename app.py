@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 st.set_page_config(page_title="AI Resume Screening", layout="wide")
 
 st.title("📄 AI Resume Screening & Candidate Ranking")
-st.write("Upload multiple resumes and rank candidates based on their match with the job description.")
+st.write("Upload multiple resumes and rank candidates based on match with the job description.")
 
 # ---------------- TEXT CLEANING ----------------
 def clean_text(text):
@@ -18,7 +18,7 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
-# ---------------- JOB DESCRIPTION INPUT ----------------
+# ---------------- JOB DESCRIPTION ----------------
 job_desc = st.text_area("Paste Job Description")
 
 # ---------------- FILE UPLOAD ----------------
@@ -64,19 +64,10 @@ if st.button("Analyze Candidates"):
 
         similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
 
-        # -------- Keyword Overlap Score --------
-        jd_words = set(cleaned_jd.split())
-        resume_words = set(cleaned_resume.split())
+        # -------- Normalize score to increase interpretability --------
+        match_percentage = min((similarity / 0.65) * 100, 100)
 
-        common_keywords = jd_words.intersection(resume_words)
-        keyword_score = len(common_keywords) / max(len(jd_words), 1)
-
-        # -------- Final Combined Score --------
-        final_score = (0.7 * similarity) + (0.3 * keyword_score)
-
-        match_percentage = final_score * 100
-
-        decision = "Shortlisted" if match_percentage >= 50 else "Not Shortlisted"
+        decision = "Shortlisted" if match_percentage >= 60 else "Not Shortlisted"
 
         results.append({
             "Candidate": file.name,
